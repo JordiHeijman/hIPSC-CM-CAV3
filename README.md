@@ -10,6 +10,8 @@ This GitHub page contains the source codes in Myokit file format (.mmt) for:
 3. 2-dimensional simulation of hiPSC model with heterogenous repolarization region
 4. Example video of 2-dimensional simulation, resulting in figure-8 of reentry
 
+The details of parameter modifications to reproduce WT and CAV3 KO in both EAD-resistant and prone cell can be seen in **Supplementary Material (Online Table XVIII)**
+
 **Citation:** N/A
 
 **Link to the fulltext:** N/A
