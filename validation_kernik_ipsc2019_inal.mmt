@@ -1,0 +1,108 @@
+[[model]]
+
+[engine]
+time = 0 bind time
+    in [ms]
+
+[membrane]
+level = 0 bind pace
+
+[[protocol]]
+# Level  Start    Length   Period   Multiplier
+1.0      100.0    0.5      1000.0   0
+
+[[script]]
+import matplotlib.pyplot as pl
+import numpy as np
+import myokit
+from scipy.optimize import curve_fit
+import myokit.lib.fit as fit
+import csv
+from sklearn import metrics
+
+# Get model and protocol, create simulation
+
+base_model = "Human iPSC-CM (Kernik-2019) 200917 HS spontbeat JH.mmt"
+
+m, p, s = myokit.load(base_model)
+
+#Set up voltage-clamp simulation
+# Get pacing variable, remove binding
+p = m.get('engine.pace')
+p.set_binding(None)
+# Get membrane potential, demote to an ordinary variable
+v = m.get('membrane.V')
+v.demote()
+v.set_rhs(0)
+v.set_binding('pace') # Bind to the pacing mechanism
+    
+################################Protocol definition###########################
+def runProtocol_inal(m, inal_block):
+    p = myokit.Protocol()
+    hold = -120
+    tpre = 350
+    prepulse = -80
+    tprepulse = 50
+    active = 50
+    tactive = 5
+    obsV = -30
+    tobs = 250
+    tpost = 345
+    
+    p2 = myokit.Protocol()
+    p2.add_step(hold, 10000)
+    
+    p.add_step(hold, tpre)
+    p.add_step(prepulse, tprepulse)
+    p.add_step(active, tactive)
+    p.add_step(obsV, tobs)
+    p.add_step(hold, tpost)
+    t = p.characteristic_time()
+    
+    s = myokit.Simulation(m, p2) 
+    s.set_constant("parameters.Ca_o", 0.5) #2)
+    s.set_constant("parameters.Na_o", 5) #140)
+    #s.set_constant("parameters.K_o", 0) #4)
+    s.set_constant("phys.T", 295)   
+    s.set_constant('parameters.INaL_Block', inal_block)   
+    
+    s.pre(10000)
+    s.set_protocol(p)
+    d = s.run(t) #, log_interval = 0.1) #, log=['engine.time', 'membrane.V', 'ical.ICaL']
+    d.time()
+    #ds = d.split_periodic((tpre + tprepulse + tactive + tobs + tpost), adjust=True)
+ 
+    pl.figure("Voltage_inal")
+    pl.subplot(3,1,1)
+    pl.plot(d['engine.time'], d['membrane.V'])
+    pl.subplot(3,1,2)
+    pl.plot(d['engine.time'], d['ina.INa'])
+    pl.subplot(3,1,3)
+    pl.plot(d['engine.time'], d['inal.INaL'])
+    pl.show()
+                        
+    dtrim = d.trim(tpre + tprepulse + tactive + 50, tpre + tprepulse + tactive + 250, adjust=True)
+    pl.figure("Voltage_inal_trim")
+    pl.subplot(3,1,1)
+    pl.plot(dtrim['engine.time'], dtrim['membrane.V'])
+    pl.subplot(3,1,2)
+    pl.plot(dtrim['engine.time'], dtrim['ina.INa'])
+    pl.subplot(3,1,3)
+    pl.plot(dtrim['engine.time'], dtrim['inal.INaL'])
+    pl.show()    
+    ss_peak = np.min(dtrim['inal.INaL'])
+    
+    auc = metrics.auc(dtrim['engine.time'], dtrim['inal.INaL'])
+                    
+    return d, ss_peak, auc 
+
+######################################################################
+runProtocol_inal1, peak_curr_inal1, auc_inal1 = runProtocol_inal(m, 0)
+runProtocol_inal2, peak_curr_inal2, auc_inal2 = runProtocol_inal(m, -5) #-20)
+
+print str(peak_curr_inal1) + " vs " + str(peak_curr_inal2)
+print str(auc_inal1) + " vs " + str(auc_inal2)
+
+#np.savetxt("Validation_Vm.csv", np.c_[runProtocol_inal1['engine.time'], runProtocol_inal1['membrane.V'], runProtocol_inal2['membrane.V']], delimiter = ',')
+#np.savetxt("Validation_INaL.csv", np.c_[runProtocol_inal1['engine.time'], runProtocol_inal1['inal.INaL'], runProtocol_inal2['inal.INaL']], delimiter = ',')
+
